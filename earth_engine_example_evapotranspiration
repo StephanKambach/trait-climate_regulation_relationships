@@ -1,0 +1,33 @@
+var table = ee.FeatureCollection("projects/ee-stephankambach/assets/data_for_gee_1980_to_2020_unique_coords");
+
+var albedo_montly = ee.ImageCollection.fromImages([
+  image,image2, image3, image4, image5, image6, image7, image8, image9, image10, image11, image12]);
+
+//table = table.limit(10);
+//print(table);
+
+// create function to extract pixel values
+var albedo_extraction = function(image) {
+  return image.reduceRegions({
+  collection: table, 
+  reducer: ee.Reducer.first(), 
+  scale: 500});
+};
+
+// Extract albedo values for each point
+var results = albedo_montly.map(albedo_extraction);
+results = results.flatten();
+
+print(results)
+
+// save to google drive
+Export.table.toDrive({
+  collection: results,
+  selectors: ['long_lat_ID', 'first'],
+  folder:'feedbacks_project2_grid_based_re-analisis',
+  description:'albedo_2001_2017',
+  fileFormat: 'CSV'
+});
+
+//Map.addLayer(albedo_montly)
+//Map.addLayer(table)
