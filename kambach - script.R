@@ -1,18 +1,13 @@
 ##########################################################
-# Script to analyse the relationships between the community-weighted means
-# of 20 plant traits and climate regulation processes
+# Script to analyse effect on climate-regulating services
 # script by: Dr. Stephan Kambach (stephan.kambach@gmail.com)
-# initial date: 05.06.2023
+# initial date: 17.03.2022
 ########################################################
 
-# 1. set session -------------------------------------------------------
-
-# clean workspace
 rm(list=ls())
 gc()
-options(na.action = "na.fail")
 
-# load packages
+# 1. load libraries -------------------------------------------------------
 library(tidyverse)
 library(tidyselect)
 library(vroom)
@@ -22,6 +17,7 @@ library(ggforce)
 library(corrplot)
 library(dismo)
 library(viridis)
+library(PCAtest)
 library(grid)
 library(gridExtra)
 library(randomForest)
@@ -41,74 +37,109 @@ library(psych)
 library(GGally)
 library(ggrepel)
 
-# set working directory that contains the data 
-# and the additional functions
-setwd("C:/Users/Stephan/OneDrive/current tasks/postdoc feedbacks/scripts/feedbacks_project2/manuscript/11. submission to Nat Clim Change") 
+options(na.action = "na.fail")
+setwd("")
 
-# 2. load and prepare data ------------------------------------------------------------
-dat.raw = read_delim("eva_all_merged.csv", delim = "\t")
-source("kambach - additional functions for analysis.R")
+# load additional functions
+source("additional_functions.R")
 
-# log-transform variables
+# 2. load data ------------------------------------------------------------
+dat.raw = read_delim("eva_data.csv")
+
+# 3. transform data, calculate means per pixel and scale values ----------
+# log transformation
 dat.log = dat.raw %>%
   mutate(sp_richness = log(sp.richness),
          et = log(et),
-         chelsa_gsp = log(chelsa_gsp),
-         
-         CWM_LDMC = log(CWM_LDMC),
-         CWM_Leaf_delta_15N = CWM_Leaf_delta_15N,
-         CWM_LeafArea_leaf_undef = log(CWM_LeafArea_leaf_undef),
-         CWM_LeafC_perdrymass = log(CWM_LeafC_perdrymass),
-         CWM_LeafCN_ratio = log(CWM_LeafCN_ratio),
-         CWM_LeafDryMass_single = log(CWM_LeafDryMass_single),
-         CWM_Leaffreshmass = log(CWM_Leaffreshmass),
-         CWM_LeafN = log(CWM_LeafN),
-         CWM_LeafP = log(CWM_LeafP),
-         CWM_LeafThickness = log(CWM_LeafThickness),
-         CWM_LeafWaterCont = log(CWM_LeafWaterCont),
-         CWM_PlantHeight = log(CWM_PlantHeight),
-         CWM_RootingDepth = log(CWM_RootingDepth),
-         CWM_SeedMass = log(CWM_SeedMass),
-         CWM_SLA = log(CWM_SLA),
-         CWM_SpecificRootLength = log(CWM_SpecificRootLength),
-         CWM_Stem.cond.dens = log(CWM_Stem.cond.dens),
-         CWM_StemConduitDiameter = log(CWM_StemConduitDiameter),
-         CWM_StemDens = log(CWM_StemDens),
-         CWM_StemDiam = log(CWM_StemDiam),
-         
+
+         CWM_LDMC = log(CWM_LDMC), CWV_LDMC = log(CWV_LDMC),
+         CWM_Leaf_delta_15N = CWM_Leaf_delta_15N, CWV_Leaf_delta_15N = CWV_Leaf_delta_15N, 
+         CWM_LeafArea_leaf_undef = log(CWM_LeafArea_leaf_undef), CWV_LeafArea_leaf_undef = log(CWV_LeafArea_leaf_undef),
+         CWM_LeafC_perdrymass = log(CWM_LeafC_perdrymass), CWV_LeafC_perdrymass = log(CWV_LeafC_perdrymass),
+         CWM_LeafCN_ratio = log(CWM_LeafCN_ratio), CWV_LeafCN_ratio = log(CWV_LeafCN_ratio),
+         CWM_LeafDryMass_single = log(CWM_LeafDryMass_single), CWV_LeafDryMass_single = log(CWV_LeafDryMass_single),
+         CWM_Leaffreshmass = log(CWM_Leaffreshmass), CWV_Leaffreshmass = log(CWV_Leaffreshmass),
+         CWM_LeafN = log(CWM_LeafN), CWV_LeafN = log(CWV_LeafN),
+         CWM_LeafP = log(CWM_LeafP), CWV_LeafP = log(CWV_LeafP),
+         CWM_LeafThickness = log(CWM_LeafThickness), CWV_LeafThickness = log(CWV_LeafThickness),
+         CWM_LeafWaterCont = log(CWM_LeafWaterCont), CWV_LeafWaterCont = log(CWV_LeafWaterCont),
+         CWM_PlantHeight = log(CWM_PlantHeight), CWV_PlantHeight = log(CWV_PlantHeight),
+         CWM_RootingDepth = log(CWM_RootingDepth), CWV_RootingDepth = log(CWV_RootingDepth),
+         CWM_SLA = log(CWM_SLA), CWV_SLA = log(CWV_SLA),
+         CWM_SpecificRootLength = log(CWM_SpecificRootLength), CWV_SpecificRootLength = log(CWV_SpecificRootLength),
+         CWM_Stem.cond.dens = log(CWM_Stem.cond.dens), CWV_Stem.cond.dens = log(CWV_Stem.cond.dens),
+         CWM_StemConduitDiameter = log(CWM_StemConduitDiameter), CWV_StemConduitDiameter = log(CWV_StemConduitDiameter),
+         CWM_StemDens = log(CWM_StemDens), CWV_StemDens = log(CWV_StemDens),
+         CWM_StemDiam = log(CWM_StemDiam), CWV_StemDiam = log(CWV_StemDiam),
          
          eunis_class1 = factor(eunis_class1),
-         eunis_class2 = factor(eunis_class2),
-         eunis_class3 = factor(eunis_class3)) %>%
+         eunis_class2 = factor(eunis_class2)) %>%
+  
   drop_na(eunis_class2) 
 
-# scale variables within eunis level 1 classes
+# calculate mean values per pixel
+dat.log = dat.log %>%
+  group_by(eunis_class1, eunis_class2, 
+           pixel_id, pixel_longitude, pixel_latitude) %>%
+  summarise(n_plots = length(et), sp_richness = mean(sp.richness), cover_total_cwm = mean(cover_total_cwm),
+            prop_sis_reflected = mean(prop_sis_reflected), et = mean(et), npp = mean(npp),
+            
+            CWM_LDMC = mean(CWM_LDMC), CWV_LDMC = mean(CWV_LDMC),
+            CWM_Leaf_delta_15N = mean(CWM_Leaf_delta_15N), CWV_Leaf_delta_15N = mean(CWV_Leaf_delta_15N),
+            CWM_LeafArea_leaf_undef = mean(CWM_LeafArea_leaf_undef), CWV_LeafArea_leaf_undef = mean(CWV_LeafArea_leaf_undef),
+            CWM_LeafC_perdrymass = mean(CWM_LeafC_perdrymass), CWV_LeafC_perdrymass = mean(CWV_LeafC_perdrymass),
+            CWM_LeafCN_ratio = mean(CWM_LeafCN_ratio), CWV_LeafCN_ratio = mean(CWV_LeafCN_ratio),
+            CWM_LeafDryMass_single = mean(CWM_LeafDryMass_single), CWV_LeafDryMass_single = mean(CWV_LeafDryMass_single),
+            CWM_Leaffreshmass = mean(CWM_Leaffreshmass), CWV_Leaffreshmass = mean(CWV_Leaffreshmass),
+            CWM_LeafN = mean(CWM_LeafN), CWV_LeafN = mean(CWV_LeafN),
+            CWM_LeafP = mean(CWM_LeafP), CWV_LeafP = mean(CWV_LeafP),
+            CWM_LeafThickness = mean(CWM_LeafThickness), CWV_LeafThickness = mean(CWV_LeafThickness),
+            CWM_LeafWaterCont = mean(CWM_LeafWaterCont), CWV_LeafWaterCont = mean(CWV_LeafWaterCont),
+            CWM_PlantHeight = mean(CWM_PlantHeight), CWV_PlantHeight = mean(CWV_PlantHeight),
+            CWM_RootingDepth = mean(CWM_RootingDepth), CWV_RootingDepth = mean(CWV_RootingDepth),
+            CWM_SLA = mean(CWM_SLA), CWV_SLA = mean(CWV_SLA),
+            CWM_SpecificRootLength = mean(CWM_SpecificRootLength), CWV_SpecificRootLength = mean(CWV_SpecificRootLength),
+            CWM_Stem.cond.dens = mean(CWM_Stem.cond.dens), CWV_Stem.cond.dens = mean(CWV_Stem.cond.dens),
+            CWM_StemConduitDiameter = mean(CWM_StemConduitDiameter), CWV_StemConduitDiameter = mean(CWV_StemConduitDiameter),
+            CWM_StemDens = mean(CWM_StemDens), CWV_StemDens = mean(CWV_StemDens),
+            CWM_StemDiam = mean(CWM_StemDiam), CWV_StemDiam = mean(CWV_StemDiam),
+            
+            chelsa_cmi = mean(chelsa_cmi), chelsa_gsl = mean(chelsa_gsl),
+            chelsa_gsp = mean(chelsa_gsp), chelsa_gst = mean(chelsa_gst),
+            chelsa_npp = mean(chelsa_npp), chelsa_pet = mean(chelsa_pet),
+            chelsa_rsds = mean(chelsa_rsds), chelsa_sfcWind = mean(chelsa_sfcWind),
+            chelsa_swb = mean(chelsa_swb), 
+            bio_01 = mean(bio_01), bio_02 = mean(bio_02), bio_03 = mean(bio_03), 
+            bio_04 = mean(bio_04), bio_05 = mean(bio_05), bio_06 = mean(bio_06),
+            bio_07 = mean(bio_07), bio_08 = mean(bio_08), bio_09 = mean(bio_09), 
+            bio_10 = mean(bio_10), bio_11 = mean(bio_11), bio_12 = mean(bio_12),
+            bio_13 = mean(bio_13), bio_14 = mean(bio_14), bio_15 = mean(bio_15), 
+            bio_16 = mean(bio_16), bio_17 = mean(bio_17), 
+            bio_18 = mean(bio_18), bio_19 = mean(bio_19)) %>%
+  ungroup()
+
+# scale climate and trait variables within eunis2 habitats
 dat.scaled.eunis2 = dat.log %>%
   group_by(eunis_class2) %>%
-  mutate(sp_richness = scale_this(sp.richness),
-         cover_total_cwm = scale_this(cover_total_cwm),
-         et = scale_this(et),
-         npp = scale_this(npp),
-         CWM_LDMC = scale_this(CWM_LDMC),
-         CWM_Leaf_delta_15N = scale_this(CWM_Leaf_delta_15N),
-         CWM_LeafArea_leaf_undef = scale_this(CWM_LeafArea_leaf_undef),
-         CWM_LeafC_perdrymass = scale_this(CWM_LeafC_perdrymass),
-         CWM_LeafCN_ratio = scale_this(CWM_LeafCN_ratio),
-         CWM_LeafDryMass_single = scale_this(CWM_LeafDryMass_single),
-         CWM_Leaffreshmass = scale_this(CWM_Leaffreshmass),
-         CWM_LeafN = scale_this(CWM_LeafN),
-         CWM_LeafP = scale_this(CWM_LeafP),
-         CWM_LeafThickness = scale_this(CWM_LeafThickness),
-         CWM_LeafWaterCont = scale_this(CWM_LeafWaterCont),
-         CWM_PlantHeight = scale_this(CWM_PlantHeight),
-         CWM_RootingDepth = scale_this(CWM_RootingDepth),
-         CWM_SeedMass = scale_this(CWM_SeedMass),
-         CWM_SLA = scale_this(CWM_SLA),
-         CWM_SpecificRootLength = scale_this(CWM_SpecificRootLength),
-         CWM_Stem.cond.dens = scale_this(CWM_Stem.cond.dens),
-         CWM_StemConduitDiameter = scale_this(CWM_StemConduitDiameter),
-         CWM_StemDens = scale_this(CWM_StemDens),
-         CWM_StemDiam = scale_this(CWM_StemDiam),
+  mutate(CWM_LDMC = scale_this(CWM_LDMC), CWV_LDMC = scale_this(CWV_LDMC),
+         CWM_Leaf_delta_15N = scale_this(CWM_Leaf_delta_15N), CWV_Leaf_delta_15N = scale_this(CWV_Leaf_delta_15N),
+         CWM_LeafArea_leaf_undef = scale_this(CWM_LeafArea_leaf_undef), CWV_LeafArea_leaf_undef = scale_this(CWV_LeafArea_leaf_undef),
+         CWM_LeafC_perdrymass = scale_this(CWM_LeafC_perdrymass), CWV_LeafC_perdrymass = scale_this(CWV_LeafC_perdrymass),
+         CWM_LeafCN_ratio = scale_this(CWM_LeafCN_ratio), CWV_LeafCN_ratio = scale_this(CWV_LeafCN_ratio),
+         CWM_LeafDryMass_single = scale_this(CWM_LeafDryMass_single), CWV_LeafDryMass_single = scale_this(CWV_LeafDryMass_single),
+         CWM_Leaffreshmass = scale_this(CWM_Leaffreshmass), CWV_Leaffreshmass = scale_this(CWV_Leaffreshmass),
+         CWM_LeafN = scale_this(CWM_LeafN), CWV_LeafN = scale_this(CWV_LeafN),
+         CWM_LeafP = scale_this(CWM_LeafP), CWV_LeafP = scale_this(CWV_LeafP),
+         CWM_LeafThickness = scale_this(CWM_LeafThickness), CWV_LeafThickness = scale_this(CWV_LeafThickness),
+         CWM_LeafWaterCont = scale_this(CWM_LeafWaterCont), CWV_LeafWaterCont = scale_this(CWV_LeafWaterCont),
+         CWM_PlantHeight = scale_this(CWM_PlantHeight), CWV_PlantHeight = scale_this(CWV_PlantHeight),
+         CWM_RootingDepth = scale_this(CWM_RootingDepth), CWV_RootingDepth = scale_this(CWV_RootingDepth),
+         CWM_SLA = scale_this(CWM_SLA), CWV_SLA = scale_this(CWV_SLA),
+         CWM_SpecificRootLength = scale_this(CWM_SpecificRootLength), CWV_SpecificRootLength = scale_this(CWV_SpecificRootLength),
+         CWM_Stem.cond.dens = scale_this(CWM_Stem.cond.dens), CWV_Stem.cond.dens = scale_this(CWV_Stem.cond.dens),
+         CWM_StemConduitDiameter = scale_this(CWM_StemConduitDiameter), CWV_StemConduitDiameter = scale_this(CWV_StemConduitDiameter),
+         CWM_StemDens = scale_this(CWM_StemDens), CWV_StemDens = scale_this(CWV_StemDens),
+         CWM_StemDiam = scale_this(CWM_StemDiam), CWV_StemDiam = scale_this(CWV_StemDiam),
          
          chelsa_cmi = scale_this(chelsa_cmi), chelsa_gsl = scale_this(chelsa_gsl),
          chelsa_gsp = scale_this(chelsa_gsp), chelsa_gst = scale_this(chelsa_gst),
@@ -126,15 +157,12 @@ dat.scaled.eunis2 = dat.log %>%
          bio_15 = scale_this(bio_15), bio_16 = scale_this(bio_16),
          bio_17 = scale_this(bio_17), bio_18 = scale_this(bio_18),
          bio_19 = scale_this(bio_19)) %>%
-  ungroup() %>%
-  drop_na(eunis_class2)
+  ungroup()
 
-# set the colouring scheme
-color.gradient = c("#a6c6e1", "#2171b5", "#13436c",
+color.gradient = c("#a6c6e1", "#2171b5", "#13436c", 
                    "#fed98e", "#fe9929", "#993404",
                    "#acdaba", "#45ac65", "#22723a", "#134121")
 
-# create empty list that will be used to save analysis results
 empty.list.for.results = list("Forest_coniferous" = list("prop_sis_reflected" = NA, "et" = NA, "npp" = NA),
                               "Forest_deciduous" = list("prop_sis_reflected" = NA, "et" = NA, "npp" = NA),
                               "Forest_evergreen" = list("prop_sis_reflected" = NA, "et" = NA, "npp" = NA),
@@ -146,48 +174,42 @@ empty.list.for.results = list("Forest_coniferous" = list("prop_sis_reflected" = 
                               "Grassland_mesic" = list("prop_sis_reflected" = NA, "et" = NA, "npp" = NA),
                               "Grassland_wet" = list("prop_sis_reflected" = NA, "et" = NA, "npp" = NA))
 
-# create vector with the trait axes used for analysis
 traits.selected = c("CWM_pca1", "CWM_pca2", "CWM_pca3", "CWM_pca4", 
                     "CWM_pca5", "CWM_pca6", "CWM_pca7", "CWM_pca8")
 
-# create function to shorten trait names
 recode.trait.names = function(trait.vector.temp){
-  trait.vector.temp[trait.vector.temp == "CWM_LDMC"] = "LDMC"
-  trait.vector.temp[trait.vector.temp == "CWM_Leaf_delta_15N"] = "L15N"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafArea_leaf_undef"] = "LArea"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafC_perdrymass"] = "LCcont"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafCN_ratio"] = "LCNratio"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafDryMass_single"] = "LMdry"
-  trait.vector.temp[trait.vector.temp == "CWM_Leaffreshmass"] = "LMfresh"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafN"] = "LNcont"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafP"] = "LPcont"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafThickness"] = "LThic"
-  trait.vector.temp[trait.vector.temp == "CWM_LeafWaterCont"] = "LWcont"
-  trait.vector.temp[trait.vector.temp == "CWM_PlantHeight"] = "PlantHeight"
-  trait.vector.temp[trait.vector.temp == "CWM_RootingDepth"] = "RDepth"
-  trait.vector.temp[trait.vector.temp == "CWM_SeedMass"] = "SM"
-  trait.vector.temp[trait.vector.temp == "CWM_SLA"] = "SLA"
-  trait.vector.temp[trait.vector.temp == "CWM_SpecificRootLength"] = "SRL"
-  trait.vector.temp[trait.vector.temp == "CWM_Stem.cond.dens"] = "SCdens"
-  trait.vector.temp[trait.vector.temp == "CWM_StemConduitDiameter"] = "SCdiam"
-  trait.vector.temp[trait.vector.temp == "CWM_StemDens"] = "Sdens"
-  trait.vector.temp[trait.vector.temp == "CWM_StemDiam"] = "Sdiam"
+  trait.vector.temp[grepl("_LDMC", trait.vector.temp)] = "LDMC"
+  trait.vector.temp[grepl("_Leaf_delta_15N", trait.vector.temp)] = "L15N"
+  trait.vector.temp[grepl("_LeafArea_leaf_undef", trait.vector.temp)] = "LArea"
+  trait.vector.temp[grepl("_LeafC_perdrymass", trait.vector.temp)] = "LCcont"
+  trait.vector.temp[grepl("_LeafCN_ratio", trait.vector.temp)] = "LCNratio"
+  trait.vector.temp[grepl("_LeafDryMass_single", trait.vector.temp)] = "LMdry"
+  trait.vector.temp[grepl("_Leaffreshmass", trait.vector.temp)] = "LMfresh"
+  trait.vector.temp[grepl("_LeafN", trait.vector.temp)] = "LNcont"
+  trait.vector.temp[grepl("_LeafP", trait.vector.temp)] = "LPcont"
+  trait.vector.temp[grepl("_LeafThickness", trait.vector.temp)] = "LThic"
+  trait.vector.temp[grepl("_LeafWaterCont", trait.vector.temp)] = "LWcont"
+  trait.vector.temp[grepl("_PlantHeight", trait.vector.temp)] = "PlantHeight"
+  trait.vector.temp[grepl("_RootingDepth", trait.vector.temp)] = "RDepth"
+  trait.vector.temp[grepl("_SLA", trait.vector.temp)] = "SLA"
+  trait.vector.temp[grepl("_SpecificRootLength", trait.vector.temp)] = "SRL"
+  trait.vector.temp[grepl("_Stem.cond.dens", trait.vector.temp)] = "SCdens"
+  trait.vector.temp[grepl("_StemConduitDiameter", trait.vector.temp)] = "SCdiam"
+  trait.vector.temp[grepl("_StemDens", trait.vector.temp)] = "Sdens"
+  trait.vector.temp[grepl("_StemDiam", trait.vector.temp)] = "Sdiam"
   
   return(trait.vector.temp)
 }
 
-# 3. determine the principal components of trait community-weighted means  -----------------------------------------------
+# 5. get trait PCA axes -----------------------------------------------
 # show correlation
 trait.cor = cor(dat.scaled.eunis2 %>%
                   dplyr::select(CWM_LDMC:CWM_StemDiam))
 ggcorrplot::ggcorrplot(trait.cor, method = "square") + 
   scale_fill_stepsn(colours = c("blue", "white", "white", "red"))
 
-# create empty list to store the results of separate PCAs
+# reduce variation with a PCA, using 5 axes
 all.trait.pcas = list()
-
-# add empty colums to the data to store the position of 
-# each plot along the first 8 principal component axes
 dat.scaled.eunis2$CWM_pca1 = as.numeric(NA)
 dat.scaled.eunis2$CWM_pca2 = as.numeric(NA)
 dat.scaled.eunis2$CWM_pca3 = as.numeric(NA)
@@ -198,26 +220,63 @@ dat.scaled.eunis2$CWM_pca7 = as.numeric(NA)
 dat.scaled.eunis2$CWM_pca8 = as.numeric(NA)
 
 # calculate varimax rotated trait pcas with 8 axes
-# for all forest habitats
 all.trait.pcas[["Forest"]] = make.a.nice.pca.plot.test(
   data.temp = dat.scaled.eunis2 %>% filter(eunis_class1 == "Forest") %>%
-    dplyr::select(CWM_LDMC:CWM_StemDiam),
+    dplyr::select(contains("CWM"), - contains("_pca"), - contains("cover_total")),
   nfactors.temp = 8, rotate.temp = "varimax", print.plot = T,
   recode.trait.names = recode.trait.names, switch.axes.temp = "Dim.5")
 
-# for all shrubland habitats
 all.trait.pcas[["Shrubland"]] = make.a.nice.pca.plot.test(
   data.temp = dat.scaled.eunis2 %>% filter(eunis_class1 == "Shrubland") %>%
-    dplyr::select(CWM_LDMC:CWM_StemDiam),
+    dplyr::select(contains("CWM"), - contains("_pca"), - contains("cover_total")),
   nfactors.temp = 8, rotate.temp = "varimax", print.plot = T,
   recode.trait.names = recode.trait.names)
 
-# for all grassland habitats
 all.trait.pcas[["Grassland"]] = make.a.nice.pca.plot.test(
   data.temp = dat.scaled.eunis2 %>% filter(eunis_class1 == "Grassland") %>%
-    dplyr::select(CWM_LDMC:CWM_StemDiam),
+    dplyr::select(contains("CWM"), - contains("_pca"), - contains("cover_total")),
   nfactors.temp = 8, rotate.temp = "varimax", print.plot = T,
   recode.trait.names = recode.trait.names)
+
+# plot PCAs
+png(filename = "feedbacks_project2/results/pixel based analysis/trait PCA/trait_pca_forest.png",
+    res = 300, height = 3000, width = 3000)
+grid.arrange(all.trait.pcas[["Forest"]]$plots$pca12, 
+             all.trait.pcas[["Forest"]]$plots$pca34,
+             all.trait.pcas[["Forest"]]$plots$pca56, 
+             all.trait.pcas[["Forest"]]$plots$pca78, nrow = 2)
+graphics.off()
+
+png(filename = "feedbacks_project2/results/pixel based analysis/trait PCA/trait_pca_grassland.png",
+    res = 300, height = 3000, width = 3000)
+grid.arrange(all.trait.pcas[["Grassland"]]$plots$pca12, 
+             all.trait.pcas[["Grassland"]]$plots$pca34,
+             all.trait.pcas[["Grassland"]]$plots$pca56, 
+             all.trait.pcas[["Grassland"]]$plots$pca78, nrow = 2)
+graphics.off()
+
+png(filename = "feedbacks_project2/results/pixel based analysis/trait PCA/trait_pca_shrubland.png",
+    res = 300, height = 3000, width = 3000)
+grid.arrange(all.trait.pcas[["Shrubland"]]$plots$pca12, 
+             all.trait.pcas[["Shrubland"]]$plots$pca34,
+             all.trait.pcas[["Shrubland"]]$plots$pca56, 
+             all.trait.pcas[["Shrubland"]]$plots$pca78, nrow = 2)
+graphics.off()
+
+# export factor loadings
+data.to.export = all.trait.pcas[["Forest"]]$data_to_plot$var_temp_complete %>%
+  mutate(habitat = "Forest") %>%
+  bind_rows(all.trait.pcas[["Shrubland"]]$data_to_plot$var_temp_complete %>%
+              mutate(habitat = "Shrubland")) %>%
+  bind_rows(all.trait.pcas[["Grassland"]]$data_to_plot$var_temp_complete %>%
+              mutate(habitat = "Grassland")) %>%
+  mutate(Dim.1 = round(Dim.1, 2), Dim.2 = round(Dim.2, 2),
+         Dim.3 = round(Dim.3, 2), Dim.4 = round(Dim.4, 2),
+         Dim.5 = round(Dim.5, 2), Dim.6 = round(Dim.6, 2),
+         Dim.7 = round(Dim.7, 2), Dim.8 = round(Dim.8, 2))
+write.table(data.to.export, 
+            "feedbacks_project2/results/pixel based analysis/trait PCA/all_pca_loadings.txt",
+            sep = "\t", dec = ",", quote = F, row.names = F)
 
 # check amount of captured variation
 all.trait.pcas[["Forest"]]$pca_rotated$Vaccounted
@@ -243,14 +302,48 @@ for(eunis_class1.temp in as.character(unique(dat.scaled.eunis2$eunis_class1))){
   dat.scaled.eunis2[dat.scaled.eunis2$eunis_class1 == eunis_class1.temp, "CWM_pca8"] =
     all.trait.pcas[[eunis_class1.temp]]$data_to_plot$ind_temp$Dim.8}
 
-
-# 4. check relationship between bioclim and BIOCLIM+ variables -----------------
+# 5. check relationship between bioclim and BIOCLIM+ variables -----------------
+# check multivariate relationships
 pca.climate = PCA(dplyr::select(dat.scaled.eunis2,
                                 chelsa_cmi, chelsa_gsl, chelsa_gsp, chelsa_gst,
                                 chelsa_npp, chelsa_pet, chelsa_rsds, chelsa_sfcWind, chelsa_swb,
                                 bio_01, bio_02, bio_03, bio_04, bio_05, bio_06,
                                 bio_07, bio_08, bio_09, bio_10, bio_11, bio_12,
                                 bio_13, bio_14, bio_15, bio_16, bio_17, bio_18, bio_19))
+cor.climate = cor(dplyr::select(dat.scaled.eunis2,
+                                chelsa_cmi, chelsa_gsl, chelsa_gsp, chelsa_gst,
+                                chelsa_npp, chelsa_pet, chelsa_rsds, chelsa_sfcWind, chelsa_swb,
+                                bio_01, bio_02, bio_03, bio_04, bio_05, bio_06,
+                                bio_07, bio_08, bio_09, bio_10, bio_11, bio_12,
+                                bio_13, bio_14, bio_15, bio_16, bio_17, bio_18, bio_19))
+
+corrplot(cor.climate)
+
+# make a nice pca plot
+data.to.plot = list(ind_temp = data.frame(pca.climate$ind$coord) %>% as_tibble(),
+                    var_temp = data.frame(pca.climate$var$coord) %>% 
+                      rownames_to_column(var = "climate_var") %>%
+                      as_tibble() %>%
+                      mutate(climate_var = gsub("_", ":", climate_var)) %>%
+                      mutate(dataset = ifelse(grepl("chelsa", climate_var), "CHELSA bioclim+", "Bioclim")))
+                    
+plot1 = ggplot() +
+  geom_hex(data = data.to.plot$ind_temp, 
+           aes(x = Dim.1, y = Dim.2), bins = 100) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  geom_vline(xintercept = 0, linetype = "dotted") +
+  geom_segment(data = data.to.plot$var_temp, 
+               aes(x = 0, y = 0, xend = Dim.1 * 14, yend = Dim.2 * 14),
+               arrow = arrow(length = unit(0.8, "cm"))) +
+  geom_label(data = data.to.plot$var_temp, 
+             aes(x = Dim.1 * 15, y = Dim.2 * 15, label = climate_var, color = dataset), 
+             alpha = 0.6) +
+  scale_fill_gradientn(colours=c("#E8E8E8","#808080"),guide = "none", na.value = NA) +
+  scale_color_manual(values=c("#808080","blue"), guide = "none") +
+  xlab("PC1: 36.7% explained variation") +
+  ylab("PC2: 25.7% explained variation") +
+  theme_bw() +
+  theme(panel.grid = element_blank())
 
 # amount of explaine variation in bioclim variables with 6 bioclim+ variables
 rda(dat.log %>% dplyr::select(bio_01, bio_02, bio_03, bio_04, bio_05, bio_06,
@@ -260,7 +353,14 @@ rda(dat.log %>% dplyr::select(bio_01, bio_02, bio_03, bio_04, bio_05, bio_06,
     data = dat.log)
 # 94% of variation
 
-# -> use  the following climate variables
+# check bioclim+ correlations
+test.pca = PCA(dat.log %>% dplyr::select(
+  chelsa_cmi, chelsa_gsl, chelsa_gsp, chelsa_gst, chelsa_rsds, chelsa_sfcWind))
+test.cor = cor(dat.log %>% dplyr::select(
+  chelsa_cmi, chelsa_gsl, chelsa_gsp, chelsa_gst, chelsa_rsds, chelsa_sfcWind))
+corrplot(test.cor, method = "number")
+
+# -> use  the following variables
 # chelsa_cmi - climate moisture index
 # chelsa_gsl - growthing season length
 # chelsa_gsp - growing season precipitation
@@ -268,53 +368,15 @@ rda(dat.log %>% dplyr::select(bio_01, bio_02, bio_03, bio_04, bio_05, bio_06,
 # chelsa_rsds - Surface downwelling shortwave radiation
 # chelsa_sfcWind -  near-surface wind speed
 
-# 5. calculate ANOVAs between habitat types ----------------------------------------------------------------
-data.for.cfp.dist.eunis2 = data.frame("eunis_class2" = names(empty.list.for.results)) %>%
-  left_join(dat.log, by = "eunis_class2", multiple = "all")
-
-list.cfp.dist.eunis2 = list(list("prop_sis_reflected" = NA, "et" = NA, "npp" = NA))
-list.cfp.dist.letters.eunis.2 = list.cfp.dist.eunis2
-
-# linear models
-list.cfp.dist.eunis2$prop_sis_reflected = 
-  lm(prop_sis_reflected ~ eunis_class2, data = data.for.cfp.dist.eunis2)
-list.cfp.dist.eunis2$et = 
-  lm(et ~ eunis_class2, data = data.for.cfp.dist.eunis2)
-list.cfp.dist.eunis2$npp = 
-  lm(npp ~ eunis_class2, data = data.for.cfp.dist.eunis2)
-
-# anova
-summary(list.cfp.dist.eunis2$prop_sis_reflected)
-summary(list.cfp.dist.eunis2$et)
-summary(list.cfp.dist.eunis2$npp)
-
-# get multicomp letters, i.e. posthoc comparisons of mean corrected for multiple comparison
-letters.prop.sis.reflected = 
-  multcompLetters4(aov(prop_sis_reflected ~ eunis_class2, data = data.for.cfp.dist.eunis2),
-                   TukeyHSD(aov(prop_sis_reflected ~ eunis_class2, data = data.for.cfp.dist.eunis2)))$eunis_class2$Letters
-letters.et = 
-  multcompLetters4(aov(et ~ eunis_class2, data = data.for.cfp.dist.eunis2),
-                   TukeyHSD(aov(et ~ eunis_class2, data = data.for.cfp.dist.eunis2)))$eunis_class2$Letters
-letters.npp = 
-  multcompLetters4(aov(npp ~ eunis_class2, data = data.for.cfp.dist.eunis2),
-                   TukeyHSD(aov(npp ~ eunis_class2, data = data.for.cfp.dist.eunis2)))$eunis_class2$Letters
-
-# check results
-letters.prop.sis.reflected
-letters.et
-letters.npp
-
-# 6. account for effects of climate on CRPs ---------------------------
-# create empty lists to store results
+# 8. get residuals after accounting for climate ---------------------------
+# get residuals after climate and spatial dependencies
 lm.eunis2 = empty.list.for.results
 lm.expl.var.eunis2 = empty.list.for.results
 
-# add columns to the data to store the residuals after accounting for climate
 dat.scaled.eunis2$resid_prop_sis_reflected = NA
 dat.scaled.eunis2$resid_et = NA
 dat.scaled.eunis2$resid_npp = NA
 
-# for each habitat type, run linear models for each CRP 
 for(i in 1:length(lm.eunis2)){
   
   lines.temp = which(dat.scaled.eunis2$eunis_class2 == names(lm.eunis2)[i])
@@ -337,11 +399,19 @@ for(i in 1:length(lm.eunis2)){
 }
 
 # 8. analyse climate-residuals with random forests ------------------------------------------------
-
-# create empty list to store results
 rf.eunis2 = empty.list.for.results
 
-# for each habitat, run random forest model for each CRP
+traits.selected = c("CWM_pca1", "CWM_pca2", "CWM_pca3", "CWM_pca4",
+                    "CWM_pca5", "CWM_pca6", "CWM_pca7", "CWM_pca8")
+
+formula.prop.sis.reflected = as.formula(
+  paste0("resid_prop_sis_reflected ~ ", paste(traits.selected, collapse = " + ")))
+formula.et = as.formula(
+  paste0("resid_et ~ ", paste(traits.selected, collapse = " + ")))
+formula.npp = as.formula(
+  paste0("resid_npp ~ ", paste(traits.selected, collapse = " + ")))
+
+# random forest models
 for(i in 1:length(rf.eunis2)){
   
   dat.temp = filter(dat.scaled.eunis2, eunis_class2 == names(rf.eunis2)[i])
@@ -351,33 +421,25 @@ for(i in 1:length(rf.eunis2)){
   
   a = Sys.time()
   rf.eunis2[[i]]$prop_sis_reflected = 
-    randomForest(resid_prop_sis_reflected ~ CWM_pca1 + CWM_pca2 + CWM_pca3 + CWM_pca4 + 
-                   CWM_pca5 + CWM_pca6 + CWM_pca7 + CWM_pca8, 
-                 data = dat.temp,
+    randomForest(formula.prop.sis.reflected, data = dat.temp,
                  ntree = 2000, mtry = 2, type = "regression", importance = T, do.trace = 250)
   print(Sys.time() - a)
   
   a = Sys.time()
   rf.eunis2[[i]]$et = 
-    randomForest(et ~ CWM_pca1 + CWM_pca2 + CWM_pca3 + CWM_pca4 + 
-                   CWM_pca5 + CWM_pca6 + CWM_pca7 + CWM_pca8, 
-                 data = dat.temp, 
+    randomForest(formula.et, data = dat.temp, 
                  ntree = 2000, mtry = 2, type = "regression", importance = T, do.trace = 250)
   print(Sys.time() - a)
   
   a = Sys.time()
   rf.eunis2[[i]]$npp = 
-    randomForest(npp ~ CWM_pca1 + CWM_pca2 + CWM_pca3 + CWM_pca4 + 
-                   CWM_pca5 + CWM_pca6 + CWM_pca7 + CWM_pca8, 
-                 data = dat.temp, 
+    randomForest(formula.npp, data = dat.temp, 
                  ntree = 2000, mtry = 2, type = "regression", importance = T, do.trace = 250)
   print(Sys.time() - a)
   print(paste0("done: ", names(rf.eunis2)[i]))
 }
 
 # 8. plot predicted variation in CFPs -------------------------------------
-
-# create empty tables to store the predicted variation in CRP per habitat type nad CRP
 data.to.plot.prop.sis.reflected = tibble(
   eunis_class2 = names(lm.eunis2), 
   eunis_class1 = gsub("_.*", "", names(lm.eunis2)), 
@@ -391,7 +453,6 @@ data.to.plot.et$cfp = "et"
 data.to.plot.npp = data.to.plot.prop.sis.reflected
 data.to.plot.npp$cfp = "npp"
 
-# for each habitat type, fill the table with the proportion of explained variation
 for(i in 1:length(rf.eunis2)){
   
   # get climate R²
@@ -423,7 +484,6 @@ for(i in 1:length(rf.eunis2)){
   if(data.to.plot.npp$rf.r2[[i]] < 0){
     data.to.plot.npp$rf.r2[[i]] = 0}
   
-  # calculated unexplained variation
   data.to.plot.prop.sis.reflected$unexpl[[i]] = 
     100 - data.to.plot.prop.sis.reflected$lm.r2[i] - data.to.plot.prop.sis.reflected$rf.r2[i]
   data.to.plot.et$unexpl[[i]] = 
@@ -432,14 +492,11 @@ for(i in 1:length(rf.eunis2)){
     100 - data.to.plot.npp$lm.r2[i] - data.to.plot.npp$rf.r2[i]
 }
 
-# re-arrange data to long format
 data.to.plot = bind_rows(data.to.plot.prop.sis.reflected, data.to.plot.et, data.to.plot.npp) %>%
   arrange(eunis_class1, eunis_class2) %>%
   pivot_longer(cols = c(4,5,6)) %>%
   mutate(eunis_class2 = gsub("_", " - ", eunis_class2)) %>%
   mutate(color.code = ifelse(name == "lm.r2", "Climate (lm)", ifelse(name == "rf.r2", eunis_class2, "Unexplained")))
-
-# change order of color levels for correct plotting
 data.to.plot = data.to.plot %>%
   mutate(color.code = 
            factor(color.code, levels = c(
@@ -452,13 +509,13 @@ data.to.plot = data.to.plot %>%
            "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
            "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")))
 
-# create plots
-ggplot(data = data.to.plot %>%
-         mutate(cfp = recode(cfp, 
-                             "prop_sis_reflected" = "a) Reflected irradiation (%)<br>",
-                             "et" = "b) Log evapotranspiration<br>(kg m<sup>-2</sup> year<sup>-1</sup>)",
-                             "npp" = "c) Net primary productivity<br>(kg C m<sup>-2</sup> year<sup>-1</sup>)")) %>%
-         mutate(eunis_class2 = factor(eunis_class2, levels = rev(levels(data.to.plot$eunis_class2))))) +
+# axes flipped
+plot1 = ggplot(data = data.to.plot %>%
+                 mutate(cfp = recode(cfp, 
+                                     "prop_sis_reflected" = "a) Reflected irradiation (%)<br>",
+                                     "et" = "b) Log evapotranspiration<br>(kg m<sup>-2</sup> year<sup>-1</sup>)",
+                                     "npp" = "c) Net primary productivity<br>(kg C m<sup>-2</sup> year<sup>-1</sup>)")) %>%
+                 mutate(eunis_class2 = factor(eunis_class2, levels = rev(levels(data.to.plot$eunis_class2))))) +
   geom_bar(aes(x = eunis_class2, y = value, fill = color.code), 
            color = "grey", alpha = 0.9, stat = "identity", linewidth = 0.01) + 
   geom_hline(yintercept = 0) + 
@@ -468,16 +525,23 @@ ggplot(data = data.to.plot %>%
   scale_x_discrete(position = "top") +
   xlab("") + ylab("Explained variation (%)") +
   theme_classic() +
-  theme(panel.grid = element_blank(), strip.text = element_markdown(),
+  theme(panel.grid = element_blank(), strip.text = element_markdown(), legend.position = "none",
         axis.line.y = element_blank(), axis.ticks.y = element_blank(), 
         strip.background = element_blank())
 
-# 9. plot variable importance ----------------------------------------------------
+legend1 = get_legend(plot1 + 
+                    scale_fill_manual(name = "", 
+                                      breaks = c("Unexplained", "Climate (lm)"),
+                                      values = c("white", "#ededed", color.gradient)) +
+                    theme(legend.position = "bottom"))
 
-# create empty list to store importance values
+grid.arrange(plot1, legend1, nrow = 2, heights = c(1,0.15))
+
+# 8. get variable importance ----------------------------------------------------
 rf.importance.eunis2 = empty.list.for.results
 
-# for each habitat type, extract the proportion of explained variation for each CRP
+# rf.min.tree.depth.eunis2 = empty.list.for.results
+
 for(i in 1:length(rf.eunis2)){
   
   rf.importance.eunis2[[names(rf.eunis2)[i]]]$prop_sis_reflected = 
@@ -486,12 +550,28 @@ for(i in 1:length(rf.eunis2)){
     importance(rf.eunis2[[names(rf.eunis2)[i]]]$et)
   rf.importance.eunis2[[names(rf.eunis2)[i]]]$npp = 
     importance(rf.eunis2[[names(rf.eunis2)[i]]]$npp)
+  
+  # a = Sys.time()
+  # rf.min.tree.depth.eunis2[[names(rf.eunis2)[i]]]$prop_sis_reflected =
+  #   measure_importance(rf.eunis2[[names(rf.eunis2)[i]]]$prop_sis_reflected, mean_sample  = "top_trees")
+  # print(Sys.time() - a)
+  # 
+  # a = Sys.time()
+  # rf.min.tree.depth.eunis2[[names(rf.eunis2)[i]]]$et =
+  #   measure_importance(rf.eunis2[[names(rf.eunis2)[i]]]$et, mean_sample  = "top_trees")
+  # print(Sys.time() - a)
+  # 
+  # a = Sys.time()
+  # rf.min.tree.depth.eunis2[[names(rf.eunis2)[i]]]$npp =
+  #   measure_importance(rf.eunis2[[names(rf.eunis2)[i]]]$npp, mean_sample  = "top_trees")
+  # print(Sys.time() - a)
+  
+  print(paste0("done: ", names(rf.eunis2)[i]))
 }
 
-# re-arrange variable importance tables
-# for each habitat type
-for(i in length(rf.eunis2)){
-  # for each CRP
+# 10. plot importance --------------------------------------------------------
+# arrange importance tables
+for(i in 1:10){
   for(j in 1:3){
     rf.importance.eunis2[[i]][[j]] = as.data.frame(rf.importance.eunis2[[i]][[j]]) %>%
       mutate(variable = rownames(rf.importance.eunis2[[i]][[j]]))
@@ -500,7 +580,7 @@ for(i in length(rf.eunis2)){
     rf.importance.eunis2[[i]][[j]] = rf.importance.eunis2[[i]][[j]] %>%
       arrange(desc(rf_inc_mse))}}
 
-# re-arrange variable importance tables into one table
+# plot importance
 data.to.plot = bind_rows(
   list("Forest_coniferous" = bind_rows(rf.importance.eunis2$Forest_coniferous, .id = "cfp"),
        "Forest_deciduous" = bind_rows(rf.importance.eunis2$Forest_deciduous, .id = "cfp"),
@@ -514,7 +594,6 @@ data.to.plot = bind_rows(
        "Grassland_wet" = bind_rows(rf.importance.eunis2$Grassland_wet, .id = "cfp")),
   .id = "habitat") %>%
   filter(trait %in% c("CWM_pca1", "CWM_pca2", "CWM_pca3", "CWM_pca4")) %>%
-  mutate(trait = gsub("CWM_pca", "CWM PC", trait)) %>%
   mutate(eunis_class1 = gsub("_.*", "", habitat)) %>%
   group_by(habitat, cfp) %>%
   mutate(rank_mse = rank(-rf_inc_mse)) %>%
@@ -524,7 +603,7 @@ data.to.plot = bind_rows(
   mutate(trait = factor(trait, levels = rev(unique(trait)))) %>%
   unite(habitat_for_plotting, eunis_class1, habitat, sep = " - ", remove = F)
 
-# calculate average rank-based correlation between variable importance ranks 
+# calculate average rank-based correlation between ranks 
 all.correlations = data.to.plot %>%
   distinct(eunis_class1, cfp) %>%
   mutate(r = NA)
@@ -551,22 +630,39 @@ for(i in 1:nrow(all.correlations)){
 }
 
 # replace names of the first two CWM trait axes
-data.to.plot$trait = as.character(data.to.plot$trait)
-data.to.plot$trait[data.to.plot$trait == "CWM PC1"] = "Leaf economics spectrum"
-data.to.plot$trait[data.to.plot$trait == "CWM PC2"] = "Leaf mass"
-data.to.plot$trait = factor(data.to.plot$trait, levels = c(
-  "CWM PC4", "CWM PC3", "Leaf mass", "Leaf economics spectrum"))
+data.to.plot = data.to.plot %>%
+  mutate(trait = as.character(trait)) %>%
+  mutate(trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca1", "LES", trait),
+         trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca2", "Leaf size", trait),
+         trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca3", "Trait pc3/4", trait),
+         trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca4", "Plant height", trait),
+         
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca1", "LES", trait),
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca2", "Leaf size", trait),
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca3", "Plant height", trait),
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca4", "Trait pc3/4", trait),
+         
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca1", "LES", trait),
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca2", "Leaf size", trait),
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca3", "Plant height", trait),
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca4", "Trait pc3/4", trait)) %>%
+  mutate(trait = factor(trait, levels = c("Trait pc3/4", "Plant height", "Leaf size", "LES")))
 
-# plot variable importance for proportion of reflected irradiation
-ggplot(data.to.plot %>% 
-         filter(cfp == "prop_sis_reflected") %>%
-         left_join(all.correlations, by = c("eunis_class1", "cfp")) %>%
-         unite(eunis_class1, eunis_class1, r, sep = ", r = ") %>%
-         mutate(habitat_for_plotting = factor(habitat_for_plotting, levels = c(
-           "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
-           "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
-           "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
-           eunis_class1 = factor(eunis_class1, levels = unique(eunis_class1)))) +
+# check mean rank level of explained variation for all 4 traits
+data.to.plot %>%
+  group_by(trait) %>%
+  summarise(mean_rank = mean(rank_mse))
+
+# plotting
+plot1 = ggplot(data.to.plot %>% 
+                filter(cfp == "prop_sis_reflected") %>%
+                left_join(all.correlations, by = c("eunis_class1", "cfp")) %>%
+                unite(eunis_class1, eunis_class1, r, sep = ", r = ") %>%
+                mutate(habitat_for_plotting = factor(habitat_for_plotting, levels = c(
+                  "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
+                  "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
+                  "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
+                  eunis_class1 = factor(eunis_class1, levels = unique(eunis_class1)))) +
   geom_point(aes(x = rf_inc_mse, y = trait, fill = habitat_for_plotting), 
              color = "black", pch = 21, alpha = 0.8, size = 6) +
   geom_text(aes(x = rf_inc_mse, y = trait, label = rank_mse), 
@@ -579,16 +675,15 @@ ggplot(data.to.plot %>%
   theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(),
         legend.position = "right", plot.title = element_markdown(), strip.background = element_rect(fill = "white"))
 
-# plot variable importance for evapotranspiration
-ggplot(data.to.plot %>% 
-         filter(cfp == "et") %>%
-         left_join(all.correlations, by = c("eunis_class1", "cfp")) %>%
-         unite(eunis_class1, eunis_class1, r, sep = ", r = ") %>%
-         mutate(habitat_for_plotting = factor(habitat_for_plotting, levels = c(
-           "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
-           "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
-           "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
-           eunis_class1 = factor(eunis_class1, levels = unique(eunis_class1)))) +
+plot2= ggplot(data.to.plot %>% 
+                filter(cfp == "et") %>%
+                left_join(all.correlations, by = c("eunis_class1", "cfp")) %>%
+                unite(eunis_class1, eunis_class1, r, sep = ", r = ") %>%
+                mutate(habitat_for_plotting = factor(habitat_for_plotting, levels = c(
+                  "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
+                  "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
+                  "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
+                  eunis_class1 = factor(eunis_class1, levels = unique(eunis_class1)))) +
   geom_point(aes(x = rf_inc_mse, y = trait, fill = habitat_for_plotting), 
              color = "black", pch = 21, alpha = 0.8, size = 6) +
   geom_text(aes(x = rf_inc_mse, y = trait, label = rank_mse), 
@@ -601,16 +696,15 @@ ggplot(data.to.plot %>%
   theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(),
         legend.position = "right", plot.title = element_markdown(), strip.background = element_rect(fill = "white"))
 
-# plot variable importance for net primary productivity
-ggplot(data.to.plot %>% 
-         filter(cfp == "npp") %>%
-         left_join(all.correlations, by = c("eunis_class1", "cfp")) %>%
-         unite(eunis_class1, eunis_class1, r, sep = ", r = ") %>%
-         mutate(habitat_for_plotting = factor(habitat_for_plotting, levels = c(
-           "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
-           "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
-           "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
-           eunis_class1 = factor(eunis_class1, levels = unique(eunis_class1)))) +
+plot3 = ggplot(data.to.plot %>% 
+                 filter(cfp == "npp") %>%
+                 left_join(all.correlations, by = c("eunis_class1", "cfp")) %>%
+                 unite(eunis_class1, eunis_class1, r, sep = ", r = ") %>%
+                 mutate(habitat_for_plotting = factor(habitat_for_plotting, levels = c(
+                   "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
+                   "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
+                   "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
+                   eunis_class1 = factor(eunis_class1, levels = unique(eunis_class1)))) +
   geom_point(aes(x = rf_inc_mse, y = trait, fill = habitat_for_plotting), 
              color = "black", pch = 21, alpha = 0.8, size = 6) +
   geom_text(aes(x = rf_inc_mse, y = trait, label = rank_mse), 
@@ -623,24 +717,26 @@ ggplot(data.to.plot %>%
   theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(),
         legend.position = "right", plot.title = element_markdown(), strip.background = element_rect(fill = "white"))
 
-# 10. plot partial dependence plots --------------------------------------------
+grid_arrange_shared_legend(plot1, plot2, plot3, ncol = 1, position = "right")
 
-# create empty list to store partial dependence results
+# 11. partial dependence plots --------------------------------------------
+# get three best predictors
+traits.selected = c("CWM_pca1", "CWM_pca2", "CWM_pca3", "CWM_pca4",
+                    "CWM_pca5", "CWM_pca6", "CWM_pca7", "CWM_pca8")
+
 pd.list =  empty.list.for.results
 
-# create empty table to store for all partial dependence analyses together
+# create empty table to store results
 pd.results = tibble(value = 1,  
                     predicted = 1,
                     habitat = "test",
                     cfp = "test",
                     trait = "test")[0,]
 
-# for each habitat type
-for(habitat.temp in names(pd.list)){
-  # for each CRP
-  for(cfp.temp in names(pd.list[[habitat.temp]])){
+for(habitat.temp in names(pd.list)){ # per habitas
+  for(cfp.temp in names(pd.list[[habitat.temp]])){ # per cfp
     
-    # get partial dependence relationships
+    # get partial results
     pd.results.temp = edarf::partial_dependence(
       fit = rf.eunis2[[habitat.temp]][[cfp.temp]],
       vars = traits.selected,
@@ -648,10 +744,10 @@ for(habitat.temp in names(pd.list)){
       interaction = F,
       data = dat.scaled.eunis2 %>%
         filter(eunis_class2 == habitat.temp) %>%
-        dplyr::select(all_of(c(cfp.temp, traits.selected))))  %>% # data must be the same as used for the model
+        dplyr::select(all_of(c(cfp.temp, traits.selected))))  %>% # only the data for the model
+      
       as.data.frame()
     
-    # store results in data frame format
     pd.results.temp2 = data.frame(value = c(pd.results.temp[,1], pd.results.temp[,2], 
                                             pd.results.temp[,3], pd.results.temp[,4],
                                             pd.results.temp[,5], pd.results.temp[,6],
@@ -663,52 +759,58 @@ for(habitat.temp in names(pd.list)){
       as_tibble() %>%
       drop_na()
     
-    # add to to the overal partial dependence results table
+    # add to to the results table
     pd.results = bind_rows(pd.results, pd.results.temp2)
     
-    # print current status
+    # update
     print(paste0("done: ", habitat.temp,  "  ", cfp.temp))
   }
 }
 
-# rename habitat names
+# 9. shorten fig 6 --------------------------------------------------------
+# rename habitats
 pd.results = pd.results %>%
   mutate(eunis_class1 = gsub("_.*", "", habitat),
          habitat = gsub("_", " - ", habitat)) %>%
   mutate(eunis_class1 = gsub(" -.*", "", eunis_class1))
 
-# rename names of trait axes
-to.replace = data.frame(
-  "habitat" = rep(c("Forest", "Shrubland", "Grassland"), each = 8),
-  "axis_old" = rep(paste("CWM_pca", 1:8, sep = ""), 3),
-  "axis_new" = c(c("Leaf economics spectrum", "Leaf mass", "Leaf thickness", "Plant height",
-                   "Stem density", "Seed mass", "Rooting depth", "Stem conduit diamter"),
-                 c("Leaf economics spectrum", "Leaf mass", "Stem conduit diamter", "Plant height",
-                   "Leaf thickness", "Specific root length", "Stem density", "Rooting depth"),
-                 c("Leaf economics spectrum", "Leaf mass", "Leaf water content", "Plant height",
-                   "Rooting depth", "Stem density", "Stem conduit diameter", "Stem conduit density")))
+# rename trait pca axes
+pd.results = pd.results %>%
+  mutate(trait = as.character(trait)) %>%
+  mutate(trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca1", "LES", trait),
+         trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca2", "Leaf size", trait),
+         trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca3", "Trait pc3/4", trait),
+         trait = ifelse(eunis_class1 == "Forest" & trait == "CWM_pca4", "Plant height", trait),
+         
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca1", "LES", trait),
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca2", "Leaf size", trait),
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca3", "Plant height", trait),
+         trait = ifelse(eunis_class1 == "Shrubland" & trait == "CWM_pca4", "Trait pc3/4", trait),
+         
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca1", "LES", trait),
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca2", "Leaf size", trait),
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca3", "Plant height", trait),
+         trait = ifelse(eunis_class1 == "Grassland" & trait == "CWM_pca4", "Trait pc3/4", trait)) %>%
+  mutate(trait = factor(trait, levels = c("Trait pc3/4", "Plant height", "Leaf size", "LES")))
 
-for(i in 1:nrow(to.replace)){
-  pd.results$trait[pd.results$eunis_class1 == to.replace$habitat[i] &
-                     pd.results$trait == to.replace$axis_old[i]] = to.replace$axis_new[i]}
-
-# rescale x axis for plotting
+# rescale x and y-axis for plotting
  pd.results = pd.results %>%
    group_by(eunis_class1, cfp, trait) %>%
+   #mutate(predicted = scales::rescale(predicted, to = c(-1, 1))) %>% 
    mutate(value = scales::rescale(value, to = c(-1, 1))) %>%
    ungroup()
 
-# plot partial dependence plots for proportion of reflected irradiation
-pd.results %>%
-  filter(cfp == "prop_sis_reflected" & trait %in% c("Leaf economics spectrum", 
-                                                    "Leaf mass",
-                                                    "Plant height")) %>%
+# plotting
+plot1 = pd.results %>%
+  filter(cfp == "prop_sis_reflected" & trait %in% c("LES", "Leaf size", "Plant height", "Trait pc3/4")) %>%
   mutate(habitat = factor(habitat, levels = c(
     "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
     "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
     "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
-    eunis_class1 = factor(eunis_class1, levels = c("Forest", "Shrubland", "Grassland"))) %>%
+    eunis_class1 = factor(eunis_class1, levels = c("Forest", "Shrubland", "Grassland")),
+    trait = factor(trait, levels = c("LES", "Leaf size", "Plant height", "Trait pc3/4"))) %>%
   ggplot() +
+  #geom_hline(yintercept = 0, linetype = "solid") + 
   geom_smooth(aes(y = predicted, x = value, color = habitat), 
               linewidth = 0.8, alpha = 0.8, fill = NA, method = "loess", span = 0.2) +
   scale_color_manual(name = "", values = color.gradient) +
@@ -722,17 +824,18 @@ pd.results %>%
         plot.title = element_markdown(size = 20), legend.title = element_text(size=20), 
         legend.text = element_text(size=11))
 
-# plot partial dependence plots for evapotranspiration
-pd.results %>%
-  filter(cfp == "et" & trait %in% c("Leaf economics spectrum", 
-                                    "Leaf mass",
-                                    "Plant height")) %>%
+legend.save.for.later = get_legend(plot1)
+
+plot2 = pd.results %>%
+  filter(cfp == "et" & trait %in% c("LES", "Leaf size", "Plant height", "Trait pc3/4")) %>%
   mutate(habitat = factor(habitat, levels = c(
     "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
     "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
     "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
-    eunis_class1 = factor(eunis_class1, levels = c("Forest", "Shrubland", "Grassland"))) %>%
+    eunis_class1 = factor(eunis_class1, levels = c("Forest", "Shrubland", "Grassland")),
+    trait = factor(trait, levels = c("LES", "Leaf size", "Plant height", "Trait pc3/4"))) %>%
   ggplot() +
+  #geom_hline(yintercept = 0, linetype = "solid") + 
   geom_smooth(aes(y = predicted, x = value, color = habitat), 
               linewidth = 0.8, alpha = 0.8, fill = NA, method = "loess", span = 0.2) +
   scale_color_manual(name = "", values = color.gradient) +
@@ -746,17 +849,16 @@ pd.results %>%
         plot.title = element_markdown(size = 20), legend.title = element_text(size=20), 
         legend.text = element_text(size=11))
 
-# plot partial dependence plots for net primary productivity
-pd.results %>%
-  filter(cfp == "npp" & trait %in% c("Leaf economics spectrum", 
-                                     "Leaf mass",
-                                     "Plant height")) %>%
+plot3 = pd.results %>%
+  filter(cfp == "npp" & trait %in% c("LES", "Leaf size", "Plant height", "Trait pc3/4")) %>%
   mutate(habitat = factor(habitat, levels = c(
     "Forest - coniferous", "Forest - deciduous", "Forest - evergreen",
     "Shrubland - alpine", "Shrubland - heathland", "Shrubland - temperate",
     "Grassland - alpine", "Grassland - dry", "Grassland - mesic", "Grassland - wet")),
-    eunis_class1 = factor(eunis_class1, levels = c("Forest", "Shrubland", "Grassland"))) %>%
+    eunis_class1 = factor(eunis_class1, levels = c("Forest", "Shrubland", "Grassland")),
+    trait = factor(trait, levels = c("LES", "Leaf size", "Plant height", "Trait pc3/4"))) %>%
   ggplot() +
+  #geom_hline(yintercept = 0, linetype = "solid") + 
   geom_smooth(aes(y = predicted, x = value, color = habitat), 
               linewidth = 0.8, alpha = 0.8, fill = NA, method = "loess", span = 0.2) +
   scale_color_manual(name = "", values = color.gradient) +
@@ -769,3 +871,5 @@ pd.results %>%
         axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         plot.title = element_markdown(size = 20), legend.title = element_text(size=20), 
         legend.text = element_text(size=11))
+
+grid_arrange_shared_legend(plot1, plot2, plot3, position = "bottom", ncol = 1)
